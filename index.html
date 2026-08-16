@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="manifest" href="./manifest.json" />
+  <title>Omnipad</title>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --surface-color: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --border: #334155;
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2.5rem;
+    }
+
+    #status-indicator {
+      position: absolute;
+      top: 1.5rem;
+      right: 1.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      transition: all 0.3s ease;
+    }
+    .online { background: rgba(21, 128, 61, 0.2); color: #4ade80; border: 1px solid #15803d; }
+    .offline { background: rgba(185, 28, 28, 0.2); color: #f87171; border: 1px solid #b91c1c; }
+
+    .time-container {
+      text-align: center;
+    }
+    #clock {
+      font-size: 6rem;
+      font-weight: 700;
+      letter-spacing: -0.05em;
+      line-height: 1;
+      margin: 0;
+    }
+    #date {
+      color: var(--text-muted);
+      font-size: 1.2rem;
+      margin-top: 0.5rem;
+      font-weight: 500;
+    }
+
+    .widget {
+      background: var(--surface-color);
+      padding: 1.5rem;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+      border: 1px solid var(--border);
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: var(--bg-color);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 1.5rem 0 0 0;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    li {
+      padding: 0.75rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.95rem;
+    }
+    li:last-child {
+      border-bottom: none;
+    }
+    .delete-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.25rem;
+      padding: 0 0.5rem;
+      transition: color 0.2s;
+    }
+    .delete-btn:hover {
+      color: #f87171;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="status-indicator" class="online">Online</div>
+
+  <div class="time-container">
+    <h1 id="clock">00:00</h1>
+    <div id="date">Loading...</div>
+  </div>
+
+  <div class="widget">
+    <input type="text" id="taskInput" placeholder="Add a task for today..." autocomplete="off" />
+    <ul id="taskList"></ul>
+  </div>
+
+  <script>
+    // 1. Time & Date Handling
+    function updateTime() {
+      const now = new Date();
+      document.getElementById('clock').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('date').textContent = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    // 2. Network Status
+    const statusBadge = document.getElementById('status-indicator');
+    function updateNetworkStatus() {
+      if (navigator.onLine) {
+        statusBadge.textContent = 'Online';
+        statusBadge.className = 'online';
+      } else {
+        statusBadge.textContent = 'Offline';
+        statusBadge.className = 'offline';
+      }
+    }
+    window.addEventListener('online', updateNetworkStatus);
+    window.addEventListener('offline', updateNetworkStatus);
+    updateNetworkStatus();
+
+    // 3. Task Management (localStorage)
+    const taskInput = document.getElementById('taskInput');
+    const taskList = document.getElementById('taskList');
+    let tasks = JSON.parse(localStorage.getItem('omnipad_tasks') || '[]');
+
+    function renderTasks() {
+      taskList.innerHTML = tasks.map((task, index) => `
+        <li>
+          <span>${task}</span>
+          <button class="delete-btn" onclick="removeTask(${index})" aria-label="Delete task">&times;</button>
+        </li>
+      `).join('');
+    }
+
+    taskInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && taskInput.value.trim() !== '') {
+        tasks.push(taskInput.value.trim());
+        localStorage.setItem('omnipad_tasks', JSON.stringify(tasks));
+        taskInput.value = '';
+        renderTasks();
+      }
+    });
+
+    window.removeTask = (index) => {
+      tasks.splice(index, 1);
+      localStorage.setItem('omnipad_tasks', JSON.stringify(tasks));
+      renderTasks();
+    };
+    
+    renderTasks();
+
+    // 4. Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(registration => console.log('Omnipad SW registered'))
+          .catch(err => console.error('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
